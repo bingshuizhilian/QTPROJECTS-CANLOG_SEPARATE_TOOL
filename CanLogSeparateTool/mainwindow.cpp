@@ -118,6 +118,9 @@ void MainWindow::onOpenLogButtonClicked()
         m_slFileInfo.push_back(QFileInfo(fileNames.first()).fileName());
     }
 
+    if(fileNames.isEmpty())
+        return;
+
     if(m_slFileInfo.isEmpty())
         return;
 
