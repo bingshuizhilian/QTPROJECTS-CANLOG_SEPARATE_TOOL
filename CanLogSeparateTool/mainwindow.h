@@ -50,6 +50,7 @@ private:
     QPushButton *m_pbSaveScreen;
     QPushButton *m_pbClearScreen;
     QLineEdit *m_leSeparator;
+    QCheckBox *m_cbLineNumber;
     QPushButton *m_pbSeparateLog;
 
 private:

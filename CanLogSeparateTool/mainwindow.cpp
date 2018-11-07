@@ -44,6 +44,8 @@ void MainWindow::initialization()
     QRegExp hexCodeRegex("^(0[xX][a-fA-F\\d]{3,4};)+$");
     auto validator = new QRegExpValidator(hexCodeRegex, m_leSeparator);
     m_leSeparator->setValidator(validator);
+    m_cbLineNumber = new QCheckBox(tr("show line"));
+    m_cbLineNumber->setStatusTip(tr("show line numbers when checked"));
     m_pbOpenLog = new QPushButton;
     m_pbOpenLog->setText(tr("open log"));
     connect(m_pbOpenLog, &m_pbOpenLog->clicked, this, &onOpenLogButtonClicked);
@@ -65,6 +67,7 @@ void MainWindow::initialization()
     m_gbFilterSettings->setTitle(tr("filters"));
     auto m_gbFilterSettingsLayout = new QHBoxLayout;
     m_gbFilterSettingsLayout->addWidget(m_leSeparator);
+    m_gbFilterSettingsLayout->addWidget(m_cbLineNumber);
     m_gbFilterSettingsLayout->addWidget(m_pbSeparateLog);
     m_gbFilterSettings->setLayout(m_gbFilterSettingsLayout);
 
@@ -286,7 +289,10 @@ void MainWindow::onSeparateLogButtonClicked()
         {
             if(value1.contains(value2, Qt::CaseInsensitive))
             {
-                m_pteOutput->appendPlainText(value1 + "  (line: " + QString::number(lineNumber++) + ")");
+                if(m_cbLineNumber->isChecked())
+                    m_pteOutput->appendPlainText(value1 + "  (line: " + QString::number(lineNumber++) + ")");
+                else
+                    m_pteOutput->appendPlainText(value1);
             }
         }
     }
