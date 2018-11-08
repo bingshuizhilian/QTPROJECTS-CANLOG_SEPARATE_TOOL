@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QCheckBox>
+#include <QComboBox>
 #include <QLayout>
 #include <QGroupBox>
 #include <QStringList>
@@ -50,7 +50,7 @@ private:
     QPushButton *m_pbSaveScreen;
     QPushButton *m_pbClearScreen;
     QLineEdit *m_leSeparator;
-    QCheckBox *m_cbLineNumber;
+    QComboBox *m_cbLogStyle;
     QPushButton *m_pbSeparateLog;
 
 private:

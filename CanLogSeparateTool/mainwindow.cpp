@@ -44,8 +44,12 @@ void MainWindow::initialization()
     QRegExp hexCodeRegex("^(0[xX][a-fA-F\\d]{3,4};)+$");
     auto validator = new QRegExpValidator(hexCodeRegex, m_leSeparator);
     m_leSeparator->setValidator(validator);
-    m_cbLineNumber = new QCheckBox(tr("show line"));
-    m_cbLineNumber->setStatusTip(tr("show line numbers when checked"));
+    m_cbLogStyle = new QComboBox;
+    m_cbLogStyle->setStatusTip(tr("select a log style"));
+    m_cbLogStyle->addItem(tr("time stamp"));
+    m_cbLogStyle->addItem(tr("line number"));
+    m_cbLogStyle->addItem(tr("time & line"));
+    m_cbLogStyle->addItem(tr("none"));
     m_pbOpenLog = new QPushButton;
     m_pbOpenLog->setText(tr("open log"));
     connect(m_pbOpenLog, &m_pbOpenLog->clicked, this, &onOpenLogButtonClicked);
@@ -67,7 +71,7 @@ void MainWindow::initialization()
     m_gbFilterSettings->setTitle(tr("filters"));
     auto m_gbFilterSettingsLayout = new QHBoxLayout;
     m_gbFilterSettingsLayout->addWidget(m_leSeparator);
-    m_gbFilterSettingsLayout->addWidget(m_cbLineNumber);
+    m_gbFilterSettingsLayout->addWidget(m_cbLogStyle);
     m_gbFilterSettingsLayout->addWidget(m_pbSeparateLog);
     m_gbFilterSettings->setLayout(m_gbFilterSettingsLayout);
 
@@ -284,7 +288,27 @@ void MainWindow::onSeparateLogButtonClicked()
         return;
 
     m_pteOutput->clear();
-    m_pteOutput->appendPlainText(busmaster);
+    QString bmStr;
+    switch(m_cbLogStyle->currentIndex())
+    {
+    case 0:
+        bmStr = busmaster;
+        break;
+    case 1:
+        bmStr = busmaster.right(busmaster.size() - busmaster.indexOf("<CAN ID>", Qt::CaseInsensitive));
+        bmStr += "<Line Number>";
+        break;
+    case 2:
+        bmStr = busmaster + "<Line Number>";
+        break;
+    case 3:
+        bmStr = busmaster.right(busmaster.size() - busmaster.indexOf("<CAN ID>", Qt::CaseInsensitive));
+        break;
+    default:
+        break;
+    }
+    m_pteOutput->appendPlainText(bmStr);
+
     unsigned int lineNumber = 1;
     foreach(const QString &value1, m_slOriginalLog)
     {
@@ -292,10 +316,28 @@ void MainWindow::onSeparateLogButtonClicked()
         {
             if(value1.contains(value2, Qt::CaseInsensitive))
             {
-                if(m_cbLineNumber->isChecked())
-                    m_pteOutput->appendPlainText(value1 + "  (line: " + QString::number(lineNumber++) + ")");
-                else
-                    m_pteOutput->appendPlainText(value1);
+                QString tmpStr;
+                switch(m_cbLogStyle->currentIndex())
+                {
+                case 0:
+                    tmpStr = value1;
+                    break;
+                case 1:
+                    tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
+                    tmpStr += "  (line: " + QString::number(lineNumber++) + ")";
+                    break;
+                case 2:
+                    tmpStr = value1 + "  (line: " + QString::number(lineNumber++) + ")";
+                    break;
+                case 3:
+                    tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
+                    break;
+                default:
+                    tmpStr = value1;
+                    break;
+                }
+
+                m_pteOutput->appendPlainText(tmpStr);
             }
         }
     }
