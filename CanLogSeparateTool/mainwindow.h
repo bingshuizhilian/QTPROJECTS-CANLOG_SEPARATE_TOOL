@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QSet>
 #include <QLineEdit>
+#include <QMap>
 
 namespace Ui {
 class MainWindow;
@@ -37,11 +38,11 @@ private:
     const QString busmaster = "<Time><Tx/Rx><Channel><CAN ID><Type><DLC><DataBytes>";
 
 private:
-    QStringList m_slFileInfo;
-    QStringList m_slOriginalLog;
-    QSet<QString> m_strsetAllCanMessages;
-    QStringList m_slSeparators;
-    QStringList m_slStatistics;
+    QMap<QString, QStringList> m_FileInfos;
+    QMap<QString, QStringList> m_OriginalLogs;
+    QMap<QString, QSet<QString>> m_CanMessages;
+    QMap<QString, QStringList> m_Separators;
+    QMap<QString, QStringList> m_Statistics;
 
 private:
     QPlainTextEdit *m_pteOutput;

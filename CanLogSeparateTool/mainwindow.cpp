@@ -26,10 +26,10 @@ MainWindow::~MainWindow()
 
 void MainWindow::initialization()
 {
-    //窗体名称设置
+    //window name
     setWindowTitle(tr("CanLogSeparateTool"));
 
-    //状态栏设置
+    //status bar
     auto labelAuthorInfo = new QLabel;
     labelAuthorInfo->setStatusTip(tr("click to view source code on github"));
     labelAuthorInfo->setOpenExternalLinks(true);
@@ -37,7 +37,7 @@ void MainWindow::initialization()
     labelAuthorInfo->show();
     ui->statusBar->addPermanentWidget(labelAuthorInfo);
 
-    //控件初始化
+    //components initialization
     m_pteOutput = new QPlainTextEdit;
     m_leSeparator = new QLineEdit;
     m_leSeparator->setToolTip(tr("input format(case insensitive): 0xhhh;0xhhhh"));
@@ -66,7 +66,7 @@ void MainWindow::initialization()
     m_pbSeparateLog->setText(tr("separate log"));
     connect(m_pbSeparateLog, &m_pbSeparateLog->clicked, this, &onSeparateLogButtonClicked);
 
-    //CAN消息过滤设置
+    //CAN msg filter
     m_gbFilterSettings = new QGroupBox;
     m_gbFilterSettings->setTitle(tr("filters"));
     auto m_gbFilterSettingsLayout = new QHBoxLayout;
@@ -75,7 +75,7 @@ void MainWindow::initialization()
     m_gbFilterSettingsLayout->addWidget(m_pbSeparateLog);
     m_gbFilterSettings->setLayout(m_gbFilterSettingsLayout);
 
-    //主要操作按钮
+    //main buttons
     m_gbBtns = new QGroupBox;
     m_gbBtns->setTitle(tr("operations"));
     auto m_gbBtnsLayout = new QHBoxLayout;
@@ -85,7 +85,7 @@ void MainWindow::initialization()
     m_gbBtnsLayout->addWidget(m_pbClearScreen);
     m_gbBtns->setLayout(m_gbBtnsLayout);
 
-    //全局布局
+    //global layout
     m_layoutGlobal = new QVBoxLayout;
     m_layoutGlobal->addWidget(m_pteOutput);
     m_layoutGlobal->addWidget(m_gbFilterSettings);
@@ -100,13 +100,13 @@ void MainWindow::onOpenLogButtonClicked()
     //定义文件对话框类
     QFileDialog* fileDialog = new QFileDialog(this);
     //定义文件对话框标题
-    fileDialog->setWindowTitle(tr("choose log file"));
+    fileDialog->setWindowTitle(tr("choose log file(s)"));
     //设置默认文件路径
     fileDialog->setDirectory(".");
     //设置文件过滤器
     fileDialog->setNameFilter(tr("*.log *.txt"));
     //设置可以选择多个文件,默认为只能选择一个文件QFileDialog::ExistingFile
-    fileDialog->setFileMode(QFileDialog::ExistingFile);
+    fileDialog->setFileMode(QFileDialog::ExistingFiles);
     //设置视图模式
     fileDialog->setViewMode(QFileDialog::Detail);
     //打印所有选择的文件的路径
@@ -116,112 +116,134 @@ void MainWindow::onOpenLogButtonClicked()
     {
         fileNames = fileDialog->selectedFiles();
 
-        m_slFileInfo.clear();
-        m_slFileInfo.push_back(fileNames.first());
-        m_slFileInfo.push_back(QFileInfo(fileNames.first()).absolutePath());
-        m_slFileInfo.push_back(QFileInfo(fileNames.first()).fileName());
+        //clear old data
+        m_FileInfos.clear();
+        m_OriginalLogs.clear();
+        m_CanMessages.clear();
+        m_Separators.clear();
+        m_Statistics.clear();
+
+        for(QString filename: fileNames)
+        {
+            QStringList tmp;
+            tmp << filename << QFileInfo(filename).absolutePath() << QFileInfo(filename).fileName();
+
+            m_FileInfos.insert(filename, tmp);
+            m_OriginalLogs.insert(filename, QStringList());
+            m_CanMessages.insert(filename, QSet<QString>());
+            m_Separators.insert(filename, QStringList());
+            m_Statistics.insert(filename, QStringList());
+        }
     }
 
     if(fileNames.isEmpty())
         return;
 
-    if(m_slFileInfo.isEmpty())
+    if(m_FileInfos.isEmpty())
         return;
 
-    for(auto tmp:m_slFileInfo)
+    for(auto tmp:m_FileInfos)
         qDebug()<<tmp<<endl;
 
-    //清理旧信息
+    //clear output
     m_pteOutput->clear();
-    m_slOriginalLog.clear();
-    m_strsetAllCanMessages.clear();
 
-    //获取log原文件
-    QString fileName = m_slFileInfo.at(ABSOLUTE_FILE_PATH);
-    QFile logFile(fileName);
-    if(!logFile.open(QIODevice::ReadOnly | QIODevice::Text))
+    for(QString fileNameIter: m_FileInfos.keys())
     {
-        QMessageBox::warning(this, "Warnning", "Cannot open " + fileName, QMessageBox::Yes);
-        return;
-    }
-    QTextStream logFileIn(&logFile);
-    while(!logFileIn.atEnd())
-    {
-        QString readStr = logFileIn.readLine();
-
-        //busmaster log format
-        if(!readStr.isEmpty() && !readStr.startsWith('*') && !readStr.startsWith('"'))
+        //get original logs
+        QFile logFile(fileNameIter);
+        if(!logFile.open(QIODevice::ReadOnly | QIODevice::Text))
         {
-            m_slOriginalLog.push_back(readStr);
+            QMessageBox::warning(this, "Warnning", "Cannot open " + fileNameIter, QMessageBox::Yes);
+            return;
+        }
 
-            if(readStr.contains("0x", Qt::CaseInsensitive))
+        QTextStream logFileIn(&logFile);
+        while(!logFileIn.atEnd())
+        {
+            QString readStr = logFileIn.readLine();
+
+            //busmaster log format
+            if(!readStr.isEmpty() && !readStr.startsWith('*') && !readStr.startsWith('"'))
             {
-                int index1 = 0, index2 = 0;
-                QString tmpStr;
+                m_OriginalLogs[fileNameIter].push_back(readStr);
 
-                index1 = readStr.indexOf("0x", Qt::CaseInsensitive);
+                if(readStr.contains("0x", Qt::CaseInsensitive))
+                {
+                    int index1 = 0, index2 = 0;
+                    QString tmpStr;
 
-                if(-1 != index1)
-                    index2 = readStr.indexOf(' ', index1, Qt::CaseInsensitive);
+                    index1 = readStr.indexOf("0x", Qt::CaseInsensitive);
 
-                if(-1 != index2)
-                    tmpStr = readStr.mid(index1, index2 - index1);
+                    if(-1 != index1)
+                        index2 = readStr.indexOf(' ', index1, Qt::CaseInsensitive);
 
-                if(!tmpStr.isEmpty())
-                    m_strsetAllCanMessages.insert(tmpStr.toLower());
+                    if(-1 != index2)
+                        tmpStr = readStr.mid(index1, index2 - index1);
+
+                    if(!tmpStr.isEmpty())
+                        m_CanMessages[fileNameIter].insert(tmpStr.toLower());
+                }
             }
         }
+        logFile.close();
+
+        //statistics info output
+        m_pteOutput->appendPlainText("####in log file: " + m_FileInfos[fileNameIter].at(ABSOLUTE_FILE_PATH) + "####");
+
+        m_Statistics[fileNameIter] << "***all detected can message list***";
+        foreach(const QString &value, m_CanMessages[fileNameIter])
+            m_Statistics[fileNameIter] << value;
+
+        m_Statistics[fileNameIter] << "***statistics infos***";
+        m_Statistics[fileNameIter] << "Total effective lines: " + QString::number(m_OriginalLogs[fileNameIter].size());
+        m_Statistics[fileNameIter] << "Total different can messages: " + QString::number(m_CanMessages[fileNameIter].size());
+
+        if(fileNameIter != m_FileInfos.keys().last())
+            m_Statistics[fileNameIter] << "\n";
+
+        foreach(const QString &value, m_Statistics[fileNameIter])
+            m_pteOutput->appendPlainText(value);
     }
-    logFile.close();
 
-    m_pbOpenLog->setStatusTip("current log file: " + m_slFileInfo.at(FILE_NAME));
-
-    //统计信息
-    m_slStatistics.clear();
-    m_pteOutput->appendPlainText("current loaded log file: " + m_slFileInfo.at(ABSOLUTE_FILE_PATH) + '\n');
-
-    m_slStatistics << "***all detected can message list***";
-    foreach(const QString &value, m_strsetAllCanMessages)
-        m_slStatistics << value;
-
-    m_slStatistics << "\n***statistics infos***";
-    m_slStatistics << "Total effective lines: " + QString::number(m_slOriginalLog.size());
-    m_slStatistics << "Total different can messages: " + QString::number(m_strsetAllCanMessages.size());
-
-    foreach(const QString &value, m_slStatistics)
-        m_pteOutput->appendPlainText(value);
+    m_pbOpenLog->setStatusTip("amount of current loaded files: " + QString::number(m_FileInfos.size()));
 }
 
 void MainWindow::onShowStatisticsButtonClicked()
 {
     m_pteOutput->clear();
 
-    if(!m_slFileInfo.isEmpty())
-        m_pteOutput->appendPlainText("current loaded log file: " + m_slFileInfo.at(ABSOLUTE_FILE_PATH) + '\n');
-
-    if(!m_slStatistics.isEmpty())
+    if(!m_FileInfos.isEmpty() && !m_Statistics.isEmpty())
     {
-        foreach(const QString &value, m_slStatistics)
-            m_pteOutput->appendPlainText(value);
+        for(QString fileNameIter: m_FileInfos.keys())
+        {
+            m_pteOutput->appendPlainText("####in log file: " + m_FileInfos[fileNameIter].at(ABSOLUTE_FILE_PATH) + "####");
+
+            foreach(const QString &value, m_Statistics[fileNameIter])
+                m_pteOutput->appendPlainText(value);
+        }
     }
 }
 
 void MainWindow::onSaveScreenButtonClicked()
 {
-    if(m_pteOutput->toPlainText().isEmpty())
+    if(m_pteOutput->toPlainText().isEmpty() || m_FileInfos.isEmpty())
         return;
 
-    //存储屏幕内容
-    QString tmpFileName = m_slFileInfo.at(FILE_NAME);
+    //save screen text
+    QString tmpFileName = m_FileInfos.first().at(FILE_NAME);
     QString tmpFileClassId = tmpFileName.right(4);
     QString timeInfo = QDateTime::currentDateTime().toString("yyyy-MM-dd_HH-mm-ss");
     tmpFileName = tmpFileName.left(tmpFileName.size() - 4);
-    tmpFileName += "_SeparatedLog_" + timeInfo + tmpFileClassId;
+    if(1 == m_FileInfos.size())
+        tmpFileName += "_SeparatedLog_" + timeInfo + tmpFileClassId;
+    else
+        tmpFileName += "_With_" + QString::number(m_FileInfos.size() - 1) + "_OtherFilesSeparatedLogs_" + timeInfo + tmpFileClassId;
 
     qDebug()<<tmpFileName<<endl;
 
     QString folderName = "/separatedLogs/";
-    QString dirPath = m_slFileInfo.at(ABSOLUTE_PATH) + folderName;
+    QString dirPath = m_FileInfos.first().at(ABSOLUTE_PATH) + folderName;
     QDir dir(dirPath);
     if(!dir.exists())
         dir.mkdir(dirPath);
@@ -238,9 +260,21 @@ void MainWindow::onSaveScreenButtonClicked()
 
     QTextStream out(&newFile);
 
-    if(!m_slFileInfo.isEmpty())
-        out << "original log file: " + m_slFileInfo.at(ABSOLUTE_FILE_PATH) + '\n';
-    out << m_pteOutput->toPlainText();
+    if(1 == m_FileInfos.size())
+    {
+        out << "original log file:\n" + m_FileInfos.first().at(ABSOLUTE_FILE_PATH) + '\n';
+    }
+    else
+    {
+        out << "original log files:\n";
+
+        for(QString fileNameIter: m_FileInfos.keys())
+        {
+            out << m_FileInfos[fileNameIter].at(ABSOLUTE_FILE_PATH) + '\n';
+        }
+    }
+
+    out << "\n\n" + m_pteOutput->toPlainText();
 
     newFile.close();
 
@@ -259,35 +293,40 @@ void MainWindow::onSaveScreenButtonClicked()
 void MainWindow::onSeparateLogButtonClicked()
 {
     QString separator = m_leSeparator->text();
-    if(separator.isEmpty() || m_strsetAllCanMessages.isEmpty())
+    if(separator.isEmpty() || m_CanMessages.isEmpty())
         return;
 
     QStringList tmpSeparators;
     tmpSeparators = separator.split(';', QString::SkipEmptyParts, Qt::CaseInsensitive);
 
-    m_slSeparators.clear();
-    foreach(const QString &value, tmpSeparators)
+    for(QString fileNameIter: m_FileInfos.keys())
     {
-        //can id format: 0x3af 0x5edd
-        if(value.size() != 5 && value.size() != 6)
+        m_Separators[fileNameIter].clear();
+        foreach(const QString &value, tmpSeparators)
         {
-            QMessageBox::warning(this, "Warnning", "please check input", QMessageBox::Yes);
-            return;
-        }
+            //can id format: 0x3af 0x5edd
+            if(value.size() != 5 && value.size() != 6)
+            {
+                QMessageBox::warning(this, "Warnning", "please check input", QMessageBox::Yes);
+                return;
+            }
 
-        if(!m_strsetAllCanMessages.contains(value.toLower()))
-        {
-            QMessageBox::warning(this, "Warnning", "none " + value + " record founded", QMessageBox::Yes);
-            continue;
-        }
+            if(!m_CanMessages[fileNameIter].contains(value.toLower()))
+            {
+                QMessageBox::information(this, "Warnning", "none " + value + " record was founded in "
+                                         + m_FileInfos[fileNameIter].at(ABSOLUTE_FILE_PATH), QMessageBox::Yes);
+                continue;
+            }
 
-        m_slSeparators << value.toLower();
+            m_Separators[fileNameIter] << value.toLower();
+        }
     }
 
-    if(m_slSeparators.isEmpty())
+    if(m_Separators.isEmpty())
         return;
 
     m_pteOutput->clear();
+
     QString bmStr;
     switch(m_cbLogStyle->currentIndex())
     {
@@ -307,39 +346,47 @@ void MainWindow::onSeparateLogButtonClicked()
     default:
         break;
     }
-    m_pteOutput->appendPlainText(bmStr);
 
-    unsigned int lineNumber = 1;
-    foreach(const QString &value1, m_slOriginalLog)
+    for(QString fileNameIter: m_FileInfos.keys())
     {
-        foreach(const QString &value2, m_slSeparators)
-        {
-            if(value1.contains(value2, Qt::CaseInsensitive))
-            {
-                QString tmpStr;
-                switch(m_cbLogStyle->currentIndex())
-                {
-                case 0:
-                    tmpStr = value1;
-                    break;
-                case 1:
-                    tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
-                    tmpStr += "  (line: " + QString::number(lineNumber++) + ")";
-                    break;
-                case 2:
-                    tmpStr = value1 + "  (line: " + QString::number(lineNumber++) + ")";
-                    break;
-                case 3:
-                    tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
-                    break;
-                default:
-                    tmpStr = value1;
-                    break;
-                }
+        m_pteOutput->appendPlainText("--->" + m_FileInfos[fileNameIter].at(ABSOLUTE_FILE_PATH) + "<---");
+        m_pteOutput->appendPlainText(bmStr);
 
-                m_pteOutput->appendPlainText(tmpStr);
+        unsigned int lineNumber = 1;
+        foreach(const QString &value1, m_OriginalLogs[fileNameIter])
+        {
+            foreach(const QString &value2, m_Separators[fileNameIter])
+            {
+                if(value1.contains(value2, Qt::CaseInsensitive))
+                {
+                    QString tmpStr;
+                    switch(m_cbLogStyle->currentIndex())
+                    {
+                    case 0:
+                        tmpStr = value1;
+                        break;
+                    case 1:
+                        tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
+                        tmpStr += "  (line: " + QString::number(lineNumber++) + ")";
+                        break;
+                    case 2:
+                        tmpStr = value1 + "  (line: " + QString::number(lineNumber++) + ")";
+                        break;
+                    case 3:
+                        tmpStr = value1.right(value1.size() - value1.indexOf("0x", Qt::CaseInsensitive));
+                        break;
+                    default:
+                        tmpStr = value1;
+                        break;
+                    }
+
+                    m_pteOutput->appendPlainText(tmpStr);
+                }
             }
         }
+
+        if(fileNameIter != m_FileInfos.keys().last())
+            m_pteOutput->appendPlainText("\n\n");
     }
 
     QTextCursor cursor = m_pteOutput->textCursor();
